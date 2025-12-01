@@ -237,6 +237,13 @@ This API includes JWT-based authentication to teach security concepts.
 
 ### Authentication Endpoints
 
+#### Register (Optional)
+```bash
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"newuser","password":"pass123","role":"user"}'
+```
+
 #### Login
 ```bash
 curl -X POST http://localhost:3000/auth/login \
@@ -265,6 +272,16 @@ curl -X POST http://localhost:3000/students \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"name":"New Student","email":"new@example.com","course":"Math"}'
 ```
+
+#### Logout
+
+Invalidate your token (requires authentication):
+```bash
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+After logout, the token is blacklisted and cannot be used again. You must login to get a new token.
 
 ### Protected Endpoints
 

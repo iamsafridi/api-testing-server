@@ -241,3 +241,155 @@ Now you can test POST, PUT, PATCH, DELETE endpoints with the token.
 4. Client sends token in Authorization header for each request
 5. Server validates token and extracts user info
 6. Token expires after set time (24h in this API)
+
+
+## Logout / Session Invalidation
+
+### How Logout Works with JWT
+
+Unlike traditional session-based auth, JWT tokens are stateless. Once issued, they're valid until expiration. This API implements logout using a **token blacklist**:
+
+1. User logs out
+2. Token is added to a blacklist (in-memory Set)
+3. Future requests with that token are rejected
+4. Token remains blacklisted until server restart
+
+### Logout Endpoint
+
+```bash
+# First login and save token
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"teacher","password":"teacher123"}' \
+  | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+# Use the token (works)
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+
+# Logout (invalidate token)
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+
+# Try to use same token again (fails)
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response after logout:**
+```json
+{
+  "success": false,
+  "message": "Token has been revoked. Please login again."
+}
+```
+
+### Client-Side Logout
+
+In a real application, the client should also:
+
+1. Call the logout endpoint
+2. Delete the token from storage (localStorage, sessionStorage, cookies)
+3. Redirect to login page
+
+**Example JavaScript:**
+```javascript
+// Logout function
+async function logout() {
+  const token = localStorage.getItem('token');
+  
+  // Call logout endpoint
+  await fetch('http://localhost:3000/auth/logout', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  // Remove token from storage
+  localStorage.removeItem('token');
+  
+  // Redirect to login
+  window.location.href = '/login';
+}
+```
+
+### Different Logout Strategies
+
+#### 1. Token Blacklist (Current Implementation)
+- **Pros**: Immediate invalidation, works across all servers if using shared storage
+- **Cons**: Requires server-side storage, memory grows over time
+- **Best for**: Teaching, small apps, when immediate logout is critical
+
+#### 2. Client-Side Only (Simple)
+- Just delete token from client storage
+- **Pros**: No server changes needed, stateless
+- **Cons**: Token still valid if stolen, works until expiration
+- **Best for**: Low-security apps, short token expiration times
+
+#### 3. Short-Lived Tokens + Refresh Tokens
+- Access token expires quickly (15 min)
+- Refresh token for getting new access tokens
+- Logout invalidates refresh token
+- **Pros**: More secure, scalable
+- **Cons**: More complex implementation
+- **Best for**: Production apps
+
+#### 4. Database/Redis Blacklist
+- Store blacklisted tokens in database or Redis
+- **Pros**: Persists across server restarts, scalable
+- **Cons**: Requires external storage
+- **Best for**: Production with multiple servers
+
+### Teaching Points
+
+1. **Stateless vs Stateful**: JWT is stateless, but logout requires state (blacklist)
+2. **Token Lifecycle**: Issue → Use → Revoke → Expire
+3. **Security Trade-offs**: Convenience vs immediate invalidation
+4. **Client Responsibility**: Client must delete token too
+5. **Expiration**: Even without logout, tokens expire (24h in this API)
+
+### Testing Logout Flow
+
+```bash
+# Complete logout test
+echo "1. Login..."
+TOKEN=$(curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"teacher","password":"teacher123"}' \
+  | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+echo "Token: $TOKEN"
+
+echo -e "\n2. Access protected endpoint (should work)..."
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+
+echo -e "\n3. Logout..."
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+
+echo -e "\n4. Try to access again (should fail)..."
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+
+echo -e "\n5. Login again to get new token..."
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"teacher","password":"teacher123"}'
+```
+
+### Postman Testing
+
+1. **Login** - Save token from response
+2. **Test endpoint** - Use token in Authorization header (works)
+3. **Logout** - POST to /auth/logout with token
+4. **Test again** - Same token now fails with "Token has been revoked"
+5. **Login again** - Get new token, works normally
+
+### Notes
+
+- Blacklist is in-memory and clears on server restart
+- In production, use Redis or database for persistent blacklist
+- Consider cleaning up expired tokens from blacklist periodically
+- Token expiration (24h) provides automatic cleanup

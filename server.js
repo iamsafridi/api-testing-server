@@ -37,6 +37,9 @@ let users = [
 let nextId = 4;
 let nextUserId = 3;
 
+// Token blacklist (for logout)
+let tokenBlacklist = new Set();
+
 // Authentication Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -49,6 +52,14 @@ const authenticateToken = (req, res, next) => {
     });
   }
   
+  // Check if token is blacklisted
+  if (tokenBlacklist.has(token)) {
+    return res.status(401).json({
+      success: false,
+      message: 'Token has been revoked. Please login again.'
+    });
+  }
+  
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({
@@ -57,6 +68,7 @@ const authenticateToken = (req, res, next) => {
       });
     }
     req.user = user;
+    req.token = token; // Store token for logout
     next();
   });
 };
@@ -79,6 +91,7 @@ app.get('/', (req, res) => {
     authentication: {
       'POST /auth/register': 'Register a new user',
       'POST /auth/login': 'Login and get token',
+      'POST /auth/logout': 'Logout and invalidate token (requires token)',
       'GET /auth/me': 'Get current user info (requires token)'
     },
     endpoints: {
@@ -199,6 +212,17 @@ app.get('/auth/me', authenticateToken, (req, res) => {
       username: req.user.username,
       role: req.user.role
     }
+  });
+});
+
+// Logout (invalidate token)
+app.post('/auth/logout', authenticateToken, (req, res) => {
+  // Add token to blacklist
+  tokenBlacklist.add(req.token);
+  
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
   });
 });
 
