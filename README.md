@@ -168,6 +168,8 @@ DELETE /students/1
 - `200 OK` - Successful GET, PUT, PATCH, DELETE
 - `201 Created` - Successful POST
 - `400 Bad Request` - Missing required fields
+- `401 Unauthorized` - No token or invalid token
+- `403 Forbidden` - Valid token but insufficient permissions
 - `404 Not Found` - Resource not found
 - `409 Conflict` - Email already exists
 
@@ -217,15 +219,72 @@ curl -X DELETE http://localhost:3000/students/1
    - Set Headers: `Content-Type: application/json`
    - Add JSON body in the Body tab (raw)
 
+## Authentication & Authorization
+
+This API includes JWT-based authentication to teach security concepts.
+
+### Default Credentials
+
+**Admin User (Full Access):**
+- Username: `teacher`
+- Password: `teacher123`
+- Can: Create, Update, Delete students
+
+**Regular User (Limited Access):**
+- Username: `student`
+- Password: `student123`
+- Can: Create and Read students only
+
+### Authentication Endpoints
+
+#### Login
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"teacher","password":"teacher123"}'
+```
+
+**Response includes a JWT token:**
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "username": "teacher",
+    "role": "admin"
+  }
+}
+```
+
+#### Using the Token
+
+Add the token to the `Authorization` header:
+```bash
+curl -X POST http://localhost:3000/students \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -d '{"name":"New Student","email":"new@example.com","course":"Math"}'
+```
+
+### Protected Endpoints
+
+- **Public** (no token): GET /students, GET /students/:id
+- **Authenticated** (token required): POST /students
+- **Admin Only** (token + admin role): PUT, PATCH, DELETE /students/:id
+
+See [AUTH_EXAMPLES.md](AUTH_EXAMPLES.md) for detailed authentication examples and testing scenarios.
+
 ## Key Learning Points
 
 1. **GET vs POST vs PUT vs PATCH vs DELETE** - Different HTTP methods for different operations
-2. **Status Codes** - Understanding 200, 201, 400, 404, 409
-3. **Request Headers** - Content-Type for JSON
-4. **Request Body** - Sending data in POST/PUT/PATCH
-5. **URL Parameters** - Using :id in the path
-6. **Query Parameters** - Using ?name=value for search
-7. **Validation** - Required fields and error handling
-8. **PUT vs PATCH** - Full update vs partial update
-9. **Idempotency** - PUT and DELETE are idempotent
-10. **Response Structure** - Consistent JSON responses
+2. **Status Codes** - Understanding 200, 201, 400, 401, 403, 404, 409
+3. **Authentication** - Login with credentials to get JWT token
+4. **Authorization** - Role-based access control (admin vs user)
+5. **Bearer Tokens** - Sending JWT in Authorization header
+6. **Request Headers** - Content-Type and Authorization
+7. **Request Body** - Sending data in POST/PUT/PATCH
+8. **URL Parameters** - Using :id in the path
+9. **Query Parameters** - Using ?name=value for search
+10. **Validation** - Required fields and error handling
+11. **PUT vs PATCH** - Full update vs partial update
+12. **Security** - Password hashing, token expiration, role-based permissions
